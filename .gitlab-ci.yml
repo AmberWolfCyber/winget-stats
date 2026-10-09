@@ -1,0 +1,10 @@
+# Publishes the checked-in dashboard in public/ with GitLab Pages. Run `winget-stats export` to update it.
+pages:
+  stage: deploy
+  script:
+    - test -f public/index.html
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NSIS on winget</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --hover: rgba(11, 11, 11, 0.04);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --focus: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --hover: rgba(255, 255, 255, 0.05);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --focus: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --hover: rgba(255, 255, 255, 0.05);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --focus: #3987e5;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.muted { color: var(--text-secondary); margin: 4px 0 0; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 16px;
+}
+.card-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.tiles { display: grid; grid-template-columns: 2fr 1.4fr repeat(4, 1fr); gap: 16px; margin-top: 24px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+.tile .label { color: var(--text-secondary); }
+.tile .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+.tile .note { color: var(--text-muted); font-size: 12px; }
+.hero .value { font-size: 52px; line-height: 1.1; margin: 0 0 4px; }
+
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segmented button {
+  font: inherit; color: var(--text-secondary); background: transparent;
+  border: 0; padding: 4px 12px; cursor: pointer;
+}
+.segmented button[aria-pressed="true"] { background: var(--hover); color: var(--text-primary); font-weight: 600; }
+label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); cursor: pointer; }
+input[type="search"], select {
+  font: inherit; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+}
+input[type="search"] { width: 220px; }
+button.link {
+  font: inherit; color: var(--text-secondary); background: none; border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px; cursor: pointer;
+}
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.legend { display: flex; gap: 16px; margin: 16px 0 8px; color: var(--text-secondary); font-size: 13px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.bars { display: flex; flex-direction: column; }
+.bar-row {
+  all: unset; display: grid; grid-template-columns: 130px 1fr; column-gap: 12px;
+  cursor: pointer; border-radius: 4px;
+}
+.bar-label {
+  color: var(--text-secondary); font-variant-numeric: tabular-nums; text-align: right;
+  padding: 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bar-track {
+  display: flex; align-items: center; gap: 8px; padding: 3px 0;
+  border-left: 1px solid var(--axis);
+}
+.bar { height: 16px; border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar-value { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-row:hover, .bar-row.active { background: var(--hover); }
+.bar-row:hover .bar-label, .bar-row.active .bar-label { color: var(--text-primary); font-weight: 600; }
+.bar-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.hint { color: var(--text-muted); font-size: 12px; margin: 12px 0 0; }
+
+.cve-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
+.cve-tile { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.cve-tile .id { font-weight: 600; }
+.cve-tile .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+.cve-tile .note { color: var(--text-secondary); font-size: 13px; }
+.cve-tile .range { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.cve-tile button.link { margin-top: 10px; padding: 3px 10px; font-size: 13px; }
+
+.table-wrap { overflow-x: auto; margin-top: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--text-secondary); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.package, td.link { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+td.link { max-width: 220px; }
+tbody tr:hover { background: var(--hover); }
+a { color: var(--series-1); }
+.more { margin-top: 12px; }
+
+#tooltip {
+  position: fixed; pointer-events: none; z-index: 10;
+  background: var(--surface); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); font-size: 13px;
+}
+#tooltip .row { display: flex; gap: 8px; align-items: center; }
+#tooltip .key { width: 12px; height: 2px; }
+#tooltip strong { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 860px) {
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .tiles .hero { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>NSIS on winget</h1>
+    <p class="muted" id="subtitle">Loading data</p>
+  </header>
+
+  <section class="tiles">
+    <div class="tile hero">
+      <div class="value" id="hero">-</div>
+      <div class="label">packages use NSIS in their latest version</div>
+    </div>
+    <div class="tile" id="tile-cve-box">
+      <div class="label">With a known CVE</div><div class="value" id="tile-cve">-</div>
+      <div class="note" id="tile-cve-note"></div>
+    </div>
+    <div class="tile"><div class="label">NSIS installer files</div><div class="value" id="tile-files">-</div></div>
+    <div class="tile"><div class="label">NSIS versions in use</div><div class="value" id="tile-versions">-</div></div>
+    <div class="tile"><div class="label">Packages on NSIS 2.x</div><div class="value" id="tile-old">-</div></div>
+    <div class="tile">
+      <div class="label">Files not checked</div><div class="value" id="tile-unchecked">-</div>
+      <div class="note">Gone, failed or not an installer</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>NSIS version by package count</h2>
+      <div class="controls">
+        <div class="segmented" role="group" aria-label="Sort versions">
+          <button type="button" data-sort="packages" aria-pressed="true">Most used</button>
+          <button type="button" data-sort="version" aria-pressed="false">Version</button>
+        </div>
+        <label class="check"><input type="checkbox" id="show-dev" checked> Development builds</label>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background: var(--series-1)"></i>Release</span>
+      <span><i class="swatch" style="background: var(--series-2)"></i>Development build</span>
+    </div>
+    <div class="bars" id="bars" role="list"></div>
+    <div class="more"><button type="button" class="link" id="bars-more" hidden></button></div>
+    <p class="hint">Select a version to filter the installer list.</p>
+  </section>
+
+  <section class="card">
+    <h2>Known CVEs</h2>
+    <p class="muted">Packages with an NSIS installer in an affected version range.</p>
+    <div class="cve-grid" id="cves"></div>
+    <p class="hint" id="cve-unknown"></p>
+  </section>
+
+  <section class="card">
+    <h2>Detection results</h2>
+    <p class="muted">Installer type in the winget manifest compared with what the probe found in the file.</p>
+    <div class="table-wrap"><table id="detection"></table></div>
+  </section>
+
+  <section class="card" id="installers-card">
+    <div class="card-head">
+      <h2>Installers</h2>
+      <div class="controls">
+        <input type="search" id="search" placeholder="Search packages or URLs" aria-label="Search packages or URLs">
+        <select id="filter-detected" aria-label="Detected type"></select>
+        <select id="filter-version" aria-label="NSIS version"></select>
+        <select id="filter-cve" aria-label="CVE"></select>
+      </div>
+    </div>
+    <p class="muted" id="installer-count"></p>
+    <div class="table-wrap">
+      <table id="installers">
+        <thead><tr>
+          <th>Package</th><th>Version</th><th>NSIS version</th><th>CVEs</th><th>Detected</th>
+          <th>Architectures</th><th class="num">Size</th><th>Download</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="more"><button type="button" class="link" id="table-more" hidden></button></div>
+  </section>
+</main>
+<div id="tooltip" role="tooltip" hidden></div>
+
+<script>
+const RESULT_LABELS = {
+  nsis: "NSIS",
+  pe: "Other PE",
+  pe_partial: "Other PE, partly checked",
+  "7z_sfx": "7-Zip SFX",
+  not_pe: "Not an installer",
+  gone: "Gone",
+  failed: "Failed",
+  pending: "Not probed",
+};
+const BAR_LIMIT = 25;
+const PAGE_SIZE = 100;
+const state = { sort: "packages", showDev: true, showAllBars: false, rows: 0, versions: [], installers: [], cves: [] };
+const number = new Intl.NumberFormat("en-GB");
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === "class") node.className = value;
+    else if (key === "style") node.style.cssText = value;
+    else node.setAttribute(key, value);
+  }
+  for (const child of children) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  return node;
+}
+
+function isDevBuild(version) {
+  return /\.cvs$/i.test(version) || /^\d{1,2}-[a-z]{3}-\d{4}/i.test(version);
+}
+
+function versionKey(version) {
+  if (version === null) return [-2];
+  if (isDevBuild(version)) return [-1, Date.parse(version.replace(/\.cvs$/i, "").replace(/-/g, " ")) || 0];
+  return version.split(".").map(part => parseInt(part, 10) || 0);
+}
+
+function compareVersions(a, b) {
+  const ka = versionKey(a), kb = versionKey(b);
+  for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+    const d = (kb[i] ?? 0) - (ka[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+function cveText(cves) {
+  if (cves === null || cves === undefined) return "Unknown";
+  return cves.length ? cves.join(", ") : "None";
+}
+
+function cveCount(cves) {
+  const n = cves ? cves.length : 0;
+  return n ? ` · ${n} ${n === 1 ? "CVE" : "CVEs"}` : "";
+}
+
+function matchesCve(row, filter) {
+  if (filter === "*") return true;
+  if (row.detected !== "nsis") return false;
+  if (filter === "any") return Array.isArray(row.cves) && row.cves.length > 0;
+  if (filter === "none") return Array.isArray(row.cves) && row.cves.length === 0;
+  if (filter === "unknown") return row.cves === null;
+  return Array.isArray(row.cves) && row.cves.includes(filter);
+}
+
+function formatSize(bytes) {
+  if (bytes === null || bytes === undefined) return "-";
+  if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + " GB";
+  if (bytes >= 1e6) return (bytes / 1e6).toFixed(1) + " MB";
+  return Math.round(bytes / 1e3) + " KB";
+}
+
+function safeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+async function load(name) {
+  const response = await fetch("api/" + name + ".json");
+  if (!response.ok) throw new Error(name + ": " + response.status + " " + (await response.text()));
+  return response.json();
+}
+
+function renderHeader(meta) {
+  const values = Object.fromEntries(meta.map(r => [r.key, r.value]));
+  const parts = ["Latest version of each package"];
+  if (values.source_commit) parts.push("winget-pkgs commit " + values.source_commit.slice(0, 10));
+  if (values.indexed_at) parts.push("indexed " + new Date(Number(values.indexed_at) * 1000).toLocaleString("en-GB"));
+  document.getElementById("subtitle").textContent = parts.join(" · ");
+}
+
+function renderTiles() {
+  const nsis = state.installers.filter(r => r.detected === "nsis");
+  const packages = new Set(nsis.map(r => r.package));
+  const oldPackages = new Set(nsis.filter(r => (r.nsis_version || "").startsWith("2.")).map(r => r.package));
+  const unchecked = new Set(state.installers
+    .filter(r => ["gone", "failed", "pending"].includes(r.state) || r.detected === "not_pe").map(r => r.sha256));
+  document.getElementById("hero").textContent = number.format(packages.size);
+  document.getElementById("tile-files").textContent = number.format(new Set(nsis.map(r => r.sha256)).size);
+  document.getElementById("tile-versions").textContent = number.format(state.versions.filter(v => v.version).length);
+  document.getElementById("tile-old").textContent = number.format(oldPackages.size);
+  document.getElementById("tile-unchecked").textContent = number.format(unchecked.size);
+
+  const affected = nsis.filter(r => matchesCve(r, "any"));
+  const affectedPackages = new Set(affected.map(r => r.package)).size;
+  const files = new Set(nsis.map(r => r.sha256)).size;
+  const affectedFiles = new Set(affected.map(r => r.sha256)).size;
+  const share = packages.size ? (affectedPackages / packages.size) * 100 : 0;
+  document.getElementById("tile-cve").textContent = share.toFixed(1) + "%";
+  document.getElementById("tile-cve-note").textContent =
+    `${number.format(affectedPackages)} of ${number.format(packages.size)} NSIS packages`;
+  document.getElementById("tile-cve-box").title =
+    `${number.format(affectedFiles)} of ${number.format(files)} NSIS installer files have a known CVE`;
+}
+
+const tooltip = document.getElementById("tooltip");
+
+function showTooltip(event, version) {
+  tooltip.replaceChildren(
+    el("div", { style: "margin-bottom: 4px; color: var(--text-secondary)" }, version.version ?? "Unknown version"),
+    el("div", { class: "row" },
+      el("i", { class: "key", style: `background: var(${isDevBuild(version.version ?? "") ? "--series-2" : "--series-1"})` }),
+      el("strong", {}, number.format(version.packages)), "packages"),
+    el("div", { class: "row" }, el("i", { class: "key" }), el("strong", {}, number.format(version.files)), "files"),
+    el("div", { style: "margin-top: 4px; color: var(--text-secondary)" }, "CVEs: " + cveText(version.cves)),
+  );
+  tooltip.hidden = false;
+  const rect = event.type === "focus" ? event.target.getBoundingClientRect() : null;
+  const x = rect ? rect.left + 160 : event.clientX;
+  const y = rect ? rect.top : event.clientY;
+  tooltip.style.left = Math.min(x + 14, window.innerWidth - tooltip.offsetWidth - 8) + "px";
+  tooltip.style.top = Math.min(y + 14, window.innerHeight - tooltip.offsetHeight - 8) + "px";
+}
+
+function renderBars() {
+  let versions = state.versions.filter(v => state.showDev || !isDevBuild(v.version ?? ""));
+  versions.sort(state.sort === "packages"
+    ? (a, b) => b.packages - a.packages || compareVersions(a.version, b.version)
+    : (a, b) => compareVersions(a.version, b.version));
+  const total = versions.length;
+  if (!state.showAllBars) versions = versions.slice(0, BAR_LIMIT);
+  const max = Math.max(1, ...versions.map(v => v.packages));
+  const selected = document.getElementById("filter-version").value;
+
+  const container = document.getElementById("bars");
+  container.replaceChildren(...versions.map(v => {
+    const key = v.version ?? "";
+    const label = v.version ?? "Unknown";
+    const colour = isDevBuild(key) ? "var(--series-2)" : "var(--series-1)";
+    const button = el("button", {
+      type: "button",
+      class: "bar-row" + (selected === key ? " active" : ""),
+      role: "listitem",
+      "aria-label": `${label}: ${v.packages} packages, ${v.files} files`,
+    },
+      el("span", { class: "bar-label" }, label),
+      el("span", { class: "bar-track" },
+        el("span", { class: "bar", style: `width: calc((100% - 56px) * ${v.packages / max}); background: ${colour}` }),
+        el("span", { class: "bar-value" }, number.format(v.packages) + cveCount(v.cves))));
+    button.addEventListener("pointermove", e => showTooltip(e, v));
+    button.addEventListener("focus", e => showTooltip(e, v));
+    button.addEventListener("pointerleave", () => { tooltip.hidden = true; });
+    button.addEventListener("blur", () => { tooltip.hidden = true; });
+    button.addEventListener("click", () => {
+      document.getElementById("filter-detected").value = "nsis";
+      document.getElementById("filter-version").value = key;
+      document.getElementById("filter-cve").value = "*";
+      state.rows = PAGE_SIZE;
+      renderBars();
+      renderInstallers();
+      document.getElementById("installers-card").scrollIntoView({ behavior: "smooth" });
+    });
+    return button;
+  }));
+
+  const more = document.getElementById("bars-more");
+  more.hidden = total <= BAR_LIMIT;
+  more.textContent = state.showAllBars ? "Show top " + BAR_LIMIT : `Show all ${total} versions`;
+}
+
+function showCveInstallers(filter) {
+  document.getElementById("filter-detected").value = "nsis";
+  document.getElementById("filter-version").value = "*";
+  document.getElementById("filter-cve").value = filter;
+  state.rows = PAGE_SIZE;
+  renderBars();
+  renderInstallers();
+  document.getElementById("installers-card").scrollIntoView({ behavior: "smooth" });
+}
+
+function renderCves() {
+  const nsis = state.installers.filter(r => r.detected === "nsis");
+  const total = new Set(nsis.map(r => r.package)).size;
+  const packagesWith = filter => new Set(nsis.filter(r => matchesCve(r, filter)).map(r => r.package)).size;
+  const percent = n => (total ? (n / total) * 100 : 0).toFixed(1) + "% of NSIS packages";
+
+  const tiles = [{ id: "any", title: "Any known CVE", range: state.cves.length + " CVEs tracked" },
+    ...state.cves.map(c => ({ id: c.id, title: c.id, range: "Affects " + c.range, link: true }))];
+  document.getElementById("cves").replaceChildren(...tiles.map(t => {
+    const count = packagesWith(t.id);
+    const button = el("button", { type: "button", class: "link" }, "Show installers");
+    button.addEventListener("click", () => showCveInstallers(t.id));
+    const title = t.link
+      ? el("a", { href: "https://nvd.nist.gov/vuln/detail/" + t.id, rel: "noopener noreferrer", target: "_blank" }, t.title)
+      : t.title;
+    return el("div", { class: "cve-tile" },
+      el("div", { class: "id" }, title),
+      el("div", { class: "value" }, number.format(count) + " packages"),
+      el("div", { class: "note" }, percent(count)),
+      el("div", { class: "range" }, t.range),
+      button);
+  }));
+
+  const unknown = packagesWith("unknown");
+  document.getElementById("cve-unknown").textContent = unknown
+    ? `${number.format(unknown)} packages use a development build or have no version, so their CVE status is unknown.`
+    : "";
+}
+
+function renderDetection(rows) {
+  const columns = Object.keys(RESULT_LABELS).filter(k => rows.some(r => r.result === k));
+  const types = [...new Set(rows.map(r => r.winget_type))].sort();
+  const cell = (type, result) => rows.filter(r => r.winget_type === type && r.result === result)
+    .reduce((sum, r) => sum + r.files, 0);
+  const table = document.getElementById("detection");
+  table.replaceChildren(
+    el("thead", {}, el("tr", {}, el("th", {}, "winget type"),
+      ...columns.map(c => el("th", { class: "num" }, RESULT_LABELS[c])), el("th", { class: "num" }, "Total"))),
+    el("tbody", {}, ...types.map(type => el("tr", {}, el("td", {}, type),
+      ...columns.map(c => el("td", { class: "num" }, number.format(cell(type, c)))),
+      el("td", { class: "num" }, number.format(columns.reduce((s, c) => s + cell(type, c), 0)))))));
+}
+
+function setupFilters() {
+  const detected = document.getElementById("filter-detected");
+  detected.replaceChildren(el("option", { value: "*" }, "All results"),
+    ...Object.entries(RESULT_LABELS).map(([value, label]) => el("option", { value }, label)));
+  detected.value = "nsis";
+
+  const version = document.getElementById("filter-version");
+  const versions = [...state.versions].sort((a, b) => compareVersions(a.version, b.version));
+  version.replaceChildren(el("option", { value: "*" }, "All NSIS versions"),
+    ...versions.map(v => el("option", { value: v.version ?? "" }, v.version ?? "Unknown")));
+
+  document.getElementById("filter-cve").replaceChildren(el("option", { value: "*" }, "All CVE statuses"),
+    el("option", { value: "any" }, "Any known CVE"),
+    ...state.cves.map(c => el("option", { value: c.id }, c.id)),
+    el("option", { value: "none" }, "No known CVE"),
+    el("option", { value: "unknown" }, "CVE status unknown"));
+
+  for (const id of ["search", "filter-detected", "filter-version", "filter-cve"]) {
+    document.getElementById(id).addEventListener("input", () => {
+      state.rows = PAGE_SIZE;
+      renderInstallers();
+      renderBars();
+    });
+  }
+}
+
+function resultOf(row) {
+  return row.state === "done" ? row.detected : row.state;
+}
+
+function renderInstallers() {
+  const query = document.getElementById("search").value.trim().toLowerCase();
+  const detected = document.getElementById("filter-detected").value;
+  const version = document.getElementById("filter-version").value;
+  const cve = document.getElementById("filter-cve").value;
+  const matches = state.installers.filter(r =>
+    (detected === "*" || resultOf(r) === detected) &&
+    (version === "*" || (r.nsis_version ?? "") === version) &&
+    matchesCve(r, cve) &&
+    (!query || r.package.toLowerCase().includes(query) || (r.url || "").toLowerCase().includes(query)));
+
+  document.getElementById("installer-count").textContent =
+    `Showing ${number.format(Math.min(state.rows, matches.length))} of ${number.format(matches.length)} installers`;
+  document.querySelector("#installers tbody").replaceChildren(...matches.slice(0, state.rows).map(r => {
+    const href = safeUrl(r.url);
+    const result = resultOf(r);
+    const detail = result === "failed" || result === "gone" ? r.error : r.description;
+    return el("tr", {},
+      el("td", { class: "package", title: r.package }, r.package),
+      el("td", {}, r.version),
+      el("td", {}, r.nsis_version ?? "-"),
+      el("td", {}, r.detected === "nsis" ? cveText(r.cves) : "-"),
+      el("td", detail ? { title: detail } : {},
+        (RESULT_LABELS[result] ?? result ?? "-") + (r.wrapper === "7z_sfx" ? " in 7-Zip SFX" : "")),
+      el("td", {}, r.architectures ?? "-"),
+      el("td", { class: "num" }, formatSize(r.file_size)),
+      el("td", { class: "link" },
+        href ? el("a", { href, title: href, rel: "noopener noreferrer", target: "_blank" }, new URL(href).hostname) : "-"));
+  }));
+
+  const more = document.getElementById("table-more");
+  more.hidden = matches.length <= state.rows;
+  more.textContent = "Show " + Math.min(PAGE_SIZE, matches.length - state.rows) + " more";
+}
+
+document.querySelectorAll("[data-sort]").forEach(button => button.addEventListener("click", () => {
+  state.sort = button.dataset.sort;
+  document.querySelectorAll("[data-sort]").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
+  renderBars();
+}));
+document.getElementById("show-dev").addEventListener("change", e => { state.showDev = e.target.checked; renderBars(); });
+document.getElementById("bars-more").addEventListener("click", () => { state.showAllBars = !state.showAllBars; renderBars(); });
+document.getElementById("table-more").addEventListener("click", () => { state.rows += PAGE_SIZE; renderInstallers(); });
+
+(async () => {
+  try {
+    const [meta, versions, detection, installers, cves] = await Promise.all(
+      ["meta", "versions", "detection", "installers", "cves"].map(load));
+    state.versions = versions.map(v => ({ ...v, version: v.nsis_version }));
+    state.cves = cves;
+    state.installers = installers;
+    state.rows = PAGE_SIZE;
+    renderHeader(meta);
+    renderTiles();
+    setupFilters();
+    renderBars();
+    renderCves();
+    renderDetection(detection);
+    renderInstallers();
+  } catch (error) {
+    document.getElementById("subtitle").textContent = "Could not load data. " + error.message;
+  }
+})();
+</script>
+</body>
+</html>
